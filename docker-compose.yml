@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: github_crawler_db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: github_crawler
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  python:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: github_crawler_app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/github_crawler
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-test_token}
+    volumes:
+      - ./src:/app/src
+      - ./scripts:/app/scripts
+      - ./exports:/app/exports
+    command: tail -f /dev/null  # Keep container running
+
+volumes:
+  postgres_data:
