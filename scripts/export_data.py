@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 import sys
 import os
 import csv
@@ -15,13 +14,10 @@ def export_to_csv():
     db = DatabaseManager()
     
     try:
-        # Create exports directory
         os.makedirs("exports", exist_ok=True)
-        
-        # Get all repositories
+
         repos = db.session.query(Repository).all()
-        
-        # CSV export
+
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         csv_filename = f"exports/repositories_{timestamp}.csv"
         
@@ -50,9 +46,8 @@ def export_to_csv():
                     'archived': repo.archived
                 })
         
-        print(f"✅ Exported {len(repos)} repositories to {csv_filename}")
-        
-        # JSON export (optional)
+        print(f" Exported {len(repos)} repositories to {csv_filename}")
+
         json_filename = f"exports/repositories_{timestamp}.json"
         repos_data = [
             {
@@ -61,16 +56,16 @@ def export_to_csv():
                 'language': repo.language,
                 'forks': repo.forks_count
             }
-            for repo in repos[:1000]  # First 1000 for JSON
+            for repo in repos[:1000]  
         ]
         
         with open(json_filename, 'w', encoding='utf-8') as jsonfile:
             json.dump(repos_data, jsonfile, indent=2, ensure_ascii=False)
         
-        print(f"✅ Exported sample data to {json_filename}")
+        print(f" Exported sample data to {json_filename}")
         
     except Exception as e:
-        print(f"❌ Error exporting data: {e}")
+        print(f" Error exporting data: {e}")
         sys.exit(1)
     finally:
         db.close()

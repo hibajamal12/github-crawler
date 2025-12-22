@@ -1,5 +1,7 @@
-from sqlalchemy import create_engine
+# src/database.py - CORRECTED VERSION
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, scoped_session
+from sqlalchemy.exc import OperationalError, SQLAlchemyError
 from src.config import Config
 from src.models import Base
 import time
@@ -20,44 +22,68 @@ class DatabaseManager:
         
         for attempt in range(max_retries):
             try:
+                print(f"Attempting database connection (attempt {attempt + 1}/{max_retries})...")
+                
                 self.engine = create_engine(
                     Config.DATABASE_URL,
-                    pool_size=20,
-                    max_overflow=10,
+                    pool_size=10,
+                    max_overflow=5,
                     pool_pre_ping=True,
-                    echo=False  # Set to True for SQL logging
+                    echo=False,
+                    connect_args={
+                        'connect_timeout': 10,
+                        'application_name': 'github_crawler'
+                    }
                 )
                 
-                # Test connection
+                # Test connection - IMPORTANT: Use text() for raw SQL
                 with self.engine.connect() as conn:
-                    conn.execute("SELECT 1")
+                    result = conn.execute(text("SELECT 1"))
+                    result.fetchone()  # Consume result
                 
                 print("✅ Database connection established successfully")
                 break
                 
-            except Exception as e:
+            except OperationalError as e:
                 if attempt < max_retries - 1:
-                    print(f"⚠️ Database connection failed (attempt {attempt + 1}/{max_retries}): {e}")
+                    print(f"⚠️ Database connection failed (attempt {attempt + 1}/{max_retries}): {str(e)[:100]}")
                     time.sleep(retry_delay * (attempt + 1))
                 else:
                     print(f"❌ Failed to connect to database after {max_retries} attempts")
+                    print(f"Database URL: {Config.DATABASE_URL}")
                     raise
+            except Exception as e:
+                print(f"❌ Unexpected error: {type(e).__name__}: {str(e)[:100]}")
+                raise
     
     @property
     def session(self):
         if not hasattr(self, '_session'):
-            Session = scoped_session(sessionmaker(bind=self.engine))
+            Session = scoped_session(sessionmaker(
+                bind=self.engine,
+                autocommit=False,
+                autoflush=False,
+                expire_on_commit=False
+            ))
             self._session = Session()
         return self._session
     
     def create_tables(self):
         """Create all tables"""
-        Base.metadata.create_all(self.engine)
-        print("✅ Database tables created")
+        try:
+            Base.metadata.create_all(self.engine)
+            print("✅ Database tables created")
+        except Exception as e:
+            print(f"❌ Error creating tables: {e}")
+            raise
     
     def close(self):
         """Close database connection"""
-        if hasattr(self, '_session'):
-            self._session.remove()
-        if hasattr(self, 'engine'):
-            self.engine.dispose()
+        try:
+            if hasattr(self, '_session'):
+                self._session.close()
+                delattr(self, '_session')
+            if hasattr(self, 'engine'):
+                self.engine.dispose()
+        except Exception as e:
+            print(f"Warning: Error closing database: {e}")

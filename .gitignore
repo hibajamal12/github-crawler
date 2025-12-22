@@ -1,4 +1,3 @@
-# Python
 __pycache__/
 *.py[cod]
 *$py.class
@@ -11,20 +10,16 @@ venv/
 dist/
 build/
 
-# Database
 *.db
 *.sqlite3
 
-# Exports
 exports/
 data/
 
-# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
 
-# OS
 .DS_Store
 Thumbs.db

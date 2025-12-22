@@ -7,7 +7,6 @@ from tqdm import tqdm
 import sys
 import os
 
-# Add parent directory to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.config import Config
@@ -16,7 +15,7 @@ from src.models import Repository, CrawlMetadata
 
 class GitHubCrawler:
     def __init__(self):
-        print("🚀 Initializing GitHub Crawler...")
+        print(" Initializing GitHub Crawler...")
         self.db = DatabaseManager()
         self.headers = {
             "Authorization": f"Bearer {Config.GITHUB_TOKEN}",
@@ -26,8 +25,7 @@ class GitHubCrawler:
         self.rate_limit_reset = None
         self.total_fetched = 0
         self.repositories = []
-        
-        # Check if GitHub token is set
+
         if not Config.GITHUB_TOKEN or Config.GITHUB_TOKEN == "your_github_token_here":
             print("❌ ERROR: GitHub token not set!")
             print("Please create a .env file with GITHUB_TOKEN=your_token")
@@ -48,8 +46,7 @@ class GitHubCrawler:
                     headers=self.headers,
                     timeout=Config.REQUEST_TIMEOUT
                 )
-                
-                # Update rate limit info
+
                 if 'X-RateLimit-Remaining' in response.headers:
                     self.rate_limit_remaining = int(response.headers['X-RateLimit-Remaining'])
                 if 'X-RateLimit-Reset' in response.headers:
@@ -58,31 +55,30 @@ class GitHubCrawler:
                 
                 if response.status_code == 200:
                     data = response.json()
-                    
-                    # Check for GraphQL errors
+
                     if "errors" in data:
-                        print(f"⚠️ GraphQL Errors: {data['errors']}")
+                        print(f"GraphQL Errors: {data['errors']}")
                         # Rate limit error
                         if any("rate limit" in str(error).lower() for error in data['errors']):
                             wait_time = 60
-                            print(f"⏳ Rate limited. Waiting {wait_time} seconds...")
+                            print(f"Rate limited. Waiting {wait_time} seconds...")
                             time.sleep(wait_time)
                             continue
                         return None
                     
                     return data
                     
-                elif response.status_code == 429:  # Rate limited
+                elif response.status_code == 429:  
                     retry_after = int(response.headers.get('Retry-After', 60))
-                    print(f"⏳ Rate limited. Retrying after {retry_after} seconds...")
+                    print(f"Rate limited. Retrying after {retry_after} seconds...")
                     time.sleep(retry_after)
                     
-                elif response.status_code == 401:  # Unauthorized
-                    print("❌ Invalid GitHub token. Please check your GITHUB_TOKEN")
+                elif response.status_code == 401:  
+                    print(" Invalid GitHub token. Please check your GITHUB_TOKEN")
                     return None
                     
-                elif response.status_code == 403:  # Forbidden
-                    print("⏳ Rate limit exceeded. Waiting for reset...")
+                elif response.status_code == 403:  
+                    print("Rate limit exceeded. Waiting for reset...")
                     if self.rate_limit_reset:
                         wait_seconds = (self.rate_limit_reset - datetime.now()).total_seconds()
                         wait_seconds = max(60, min(wait_seconds, 3600))
@@ -92,14 +88,14 @@ class GitHubCrawler:
                         time.sleep(300)  # Wait 5 minutes
                         
                 else:
-                    print(f"⚠️ HTTP {response.status_code}: {response.text[:200]}")
+                    print(f" HTTP {response.status_code}: {response.text[:200]}")
                     time.sleep(Config.RETRY_DELAY * (attempt + 1))
                     
             except requests.exceptions.RequestException as e:
-                print(f"⚠️ Request error (attempt {attempt + 1}): {e}")
+                print(f" Request error (attempt {attempt + 1}): {e}")
                 time.sleep(Config.RETRY_DELAY * (attempt + 1))
         
-        print("❌ Max retries exceeded")
+        print(" Max retries exceeded")
         return None
     
     def fetch_repositories_batch(self, cursor: str = None) -> Dict:
@@ -154,8 +150,7 @@ class GitHubCrawler:
         
         search_data = data.get("data", {}).get("search", {})
         rate_limit = data.get("data", {}).get("rateLimit", {})
-        
-        # Update rate limit from response
+   
         if rate_limit:
             self.rate_limit_remaining = rate_limit.get("remaining", self.rate_limit_remaining)
         
@@ -175,7 +170,7 @@ class GitHubCrawler:
                 "language": node.get("primaryLanguage", {}).get("name"),
                 "forks_count": node.get("forkCount", 0),
                 "open_issues_count": node.get("issues", {}).get("totalCount", 0),
-                "size_kb": node.get("diskUsage", 0)  # diskUsage is in KB
+                "size_kb": node.get("diskUsage", 0) 
             }
             repositories.append(repo)
         
@@ -190,13 +185,11 @@ class GitHubCrawler:
         """Save or update a batch of repositories"""
         try:
             for repo_data in batch:
-                # Check if repository exists
                 existing = self.db.session.query(Repository).filter_by(
                     github_id=repo_data["github_id"]
                 ).first()
                 
                 if existing:
-                    # Update only if changed
                     update_needed = False
                     if existing.stargazers_count != repo_data["stargazers_count"]:
                         existing.stargazers_count = repo_data["stargazers_count"]
@@ -207,7 +200,6 @@ class GitHubCrawler:
                     if update_needed:
                         existing.last_crawled = datetime.utcnow()
                 else:
-                    # Insert new repository
                     repo = Repository(
                         github_id=repo_data["github_id"],
                         name=repo_data["name"],
@@ -229,23 +221,21 @@ class GitHubCrawler:
             
         except Exception as e:
             self.db.session.rollback()
-            print(f"❌ Error saving batch: {e}")
+            print(f" Error saving batch: {e}")
     
     def run(self):
         """Main execution method"""
-        print(f"🎯 Target: Fetch {Config.TOTAL_REPOS} repositories")
-        print(f"🔑 Using GitHub token: {Config.GITHUB_TOKEN[:10]}...")
+        print(f" Target: Fetch {Config.TOTAL_REPOS} repositories")
+        print(f" Using GitHub token: {Config.GITHUB_TOKEN[:10]}...")
         
         cursor = None
         has_next_page = True
         batch_count = 0
         
-        # Progress bar
         pbar = tqdm(total=Config.TOTAL_REPOS, desc="Crawling repositories")
         
         try:
             while has_next_page and self.total_fetched < Config.TOTAL_REPOS:
-                # Check rate limit
                 if self.rate_limit_remaining < 100:
                     if self.rate_limit_reset:
                         wait_seconds = (self.rate_limit_reset - datetime.now()).total_seconds()
@@ -255,22 +245,18 @@ class GitHubCrawler:
                     else:
                         time.sleep(60)
                 
-                # Fetch batch
                 result = self.fetch_repositories_batch(cursor)
                 
                 if not result["repositories"]:
-                    print("⚠️ No repositories returned. Stopping.")
+                    print("No repositories returned. Stopping.")
                     break
-                
-                # Save batch
+
                 self.save_batch_to_db(result["repositories"])
-                
-                # Update counters
+
                 batch_size = len(result["repositories"])
                 self.total_fetched += batch_size
                 batch_count += 1
-                
-                # Update progress bar
+
                 pbar.update(batch_size)
                 pbar.set_postfix({
                     "Batch": batch_count,
@@ -278,20 +264,16 @@ class GitHubCrawler:
                     "Total": self.total_fetched
                 })
                 
-                # Prepare for next batch
                 has_next_page = result["has_next_page"]
                 cursor = result["end_cursor"]
-                
-                # Small delay to be nice to GitHub API
+
                 time.sleep(0.5)
                 
-                # Save progress every 1000 repos
                 if self.total_fetched % Config.SAVE_INTERVAL == 0:
-                    print(f"💾 Saved {self.total_fetched} repositories so far...")
+                    print(f" Saved {self.total_fetched} repositories so far...")
             
             pbar.close()
-            
-            # Save crawl metadata
+
             metadata = CrawlMetadata(
                 total_repos_crawled=self.total_fetched,
                 last_crawl_end=datetime.utcnow(),
@@ -301,14 +283,14 @@ class GitHubCrawler:
             self.db.session.add(metadata)
             self.db.session.commit()
             
-            print(f"\n✅ Successfully crawled {self.total_fetched} repositories!")
-            print(f"📊 Rate limit remaining: {self.rate_limit_remaining}")
+            print(f"\n Successfully crawled {self.total_fetched} repositories!")
+            print(f" Rate limit remaining: {self.rate_limit_remaining}")
             
         except KeyboardInterrupt:
-            print("\n⏹️ Crawling interrupted by user")
+            print("\n⏹ Crawling interrupted by user")
             pbar.close()
         except Exception as e:
-            print(f"\n❌ Error during crawling: {e}")
+            print(f"\n Error during crawling: {e}")
             pbar.close()
             raise
         finally:
