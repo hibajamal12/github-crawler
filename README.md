@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # GitHub Star Crawler - Complete Technical Assessment Guide
 
 ## Understanding the Assignment
@@ -295,3 +296,6 @@ Complete Example: Running Everything:
             ls -lah exports/
             docker-compose logs -f github_crawler_app     # View logs
             docker-compose down                           # Stop services
+=======
+# github-crawler
+>>>>>>> 9d2d0cbc635a536596c0d60aecbaa03ffbffea71
