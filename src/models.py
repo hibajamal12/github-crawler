@@ -6,7 +6,7 @@ Base = declarative_base()
 
 class Repository(Base):
     __tablename__ = 'repositories'
-    
+
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     github_id = Column(BigInteger, unique=True, nullable=False, index=True)
     name = Column(String(255), nullable=False)

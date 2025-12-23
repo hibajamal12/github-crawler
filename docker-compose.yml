@@ -1,4 +1,9 @@
-version: '3.8'
+# <<<<<<< HEAD
+# version: '3.8'
+# =======
+# docker-compose.yml - UPDATED
+# version:
+# >>>>>>> 7c03993 (Update 2.1)
 
 services:
   postgres:
